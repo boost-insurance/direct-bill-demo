@@ -1,0 +1,445 @@
+<head>
+    <title>Boost Direct Bill Demo</title>
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+
+<body>
+    <div id="spinner-background">
+        <svg class="spinner" viewBox="0 0 50 50">
+              <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+        </svg>
+    </div>
+    <h3>Checkout</h3>
+
+    <form id="subscription-form">
+        <fieldset>
+            <legend>Boost Quote info</legend>
+            <div class="row">
+                <label for="quote-id">Quote UUID</label>
+                <input id="quote-id" placeholder="ac78e6c8-2159-47ad-b968-9fbc2c7f71f7"></input>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Billing details</legend>
+            <div class="row">
+                <label for="billing-name">Name</label>
+                <input id="billing-name" type="text" placeholder="Jane Doe"></input>
+            </div>
+            <div class="row">
+                <label for="billing-email">Email</label>
+                <input id="billing-email" type="text" placeholder="jane@doe.com"></input>
+            </div>
+            <div class="row">
+                <label for="billing-line1">Address Line 1</label>
+            <input id="billing-line1" type="text" placeholder="530 7th Avenue"></input>
+            </div>
+            <div class="row">
+                <label for="billing-line2">Address Line 2</label>
+                <input id="billing-line2" type="text" placeholder="Ste. 1109"></input>
+            </div>
+            <div class="row">
+                <label for="billing-city">City</label>
+                <input id="billing-city" type="text" placeholder="New York"></input>
+            </div>
+            <div class="row">
+                <label for="billing-state">State</label>
+                <input id="billing-state" type="text" placeholder="NY"></input>
+            </div>
+            <div class="row">
+                <label for="billing-postal-code">Postal Code</label>
+                <input id="billing-postal-code" type="text" placeholder="10018"></input>
+            </div>
+            <div class="row">
+                <label for="billing-country">Country</label>
+                <input id="billing-country" type="text" placeholder="US"></input>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Payment method</legend>
+            <div id="card-element">
+                <!-- Stripe Elements will create input elements here -->
+            </div>
+        </fieldset>
+        <button id="subscribe-button" type="submit">Subscribe</button>
+
+        <h3>Errors</h3>
+        <div id="card-element-errors" role="alert"></div>
+    </form>
+
+    <script>
+let stripe = Stripe("{{ stripe_publishable_key }}");
+let elements = stripe.elements();
+
+var card = elements.create("card", {
+    style: {
+        base: {
+            iconColor: "#0097A7",
+            color: "#000",
+            fontWeight: "500",
+            fontFamily: "Roboto, Open Sans, Segoe UI, sans-serif",
+            fontSize: "16px",
+            fontSmoothing: "antialiased",
+            ":-webkit-autofill": {
+                color: "#16325F",
+            },
+            "::placeholder": {
+                color: "#0097A7",
+            },
+        },
+        invalid: {
+            iconColor: "#FFC7EE",
+            color: "#FFC7EE",
+        },
+    },
+});
+card.mount("#card-element");
+
+card.on("change", function (event) {
+    displayError(event);
+});
+
+function displayError(event) {
+    let displayError = document.getElementById("card-element-errors");
+    if (event.error) {
+        displayError.textContent = event.error.message;
+    } else {
+        displayError.textContent = "";
+    }
+    stopLoading();
+}
+
+function startLoading() {
+    document.getElementById("subscribe-button").disabled = true;
+    document.getElementById("spinner-background").style.display = "block";
+}
+
+function stopLoading() {
+    document.getElementById("subscribe-button").disabled = false;
+    document.getElementById("spinner-background").style.display = "none";
+}
+
+
+var form = document.getElementById("subscription-form");
+
+form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    createPaymentMethod();
+    startLoading();
+});
+
+function createPaymentMethod() {
+    let quoteId = document.getElementById("quote-id").value;
+    let billingName = document.getElementById("billing-name").value;
+    let billingEmail = document.getElementById("billing-email").value;
+    let billingCity = document.getElementById("billing-city").value;
+    let billingState = document.getElementById("billing-state").value;
+    let billingLine1 = document.getElementById("billing-line1").value;
+    let billingLine2 = document.getElementById("billing-line2").value;
+    let billingPostalCode = document.getElementById("billing-postal-code").value;
+    let billingCountry = document.getElementById("billing-country").value;
+
+    // Set up payment method for recurring usage
+    stripe
+        .createPaymentMethod({
+            type: "card",
+            card: card,
+            billing_details: {
+                name: billingName,
+                email: billingEmail,
+                address: {
+                    city: billingCity,
+                    country: billingCountry,
+                    line1: billingLine1,
+                    line2: billingLine2,
+                    postal_code: billingPostalCode,
+                    state: billingState,
+                }
+            },
+        })
+        .then((result) => {
+            if (result.error) {
+                displayError(result);
+            } else {
+                createSubscription({
+                    paymentMethodId: result.paymentMethod.id,
+                    quoteId: quoteId,
+                });
+            }
+        });
+}
+
+function createSubscription({ paymentMethodId, quoteId }) {
+    // Call the Boost POST /policy-payments wrapper
+    return (
+        fetch("/checkout", {
+            method: "post",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                paymentMethodId: paymentMethodId,
+                quoteId: quoteId,
+            }),
+        })
+        .then((response) => {
+            return response.json().then(data => data);
+        })
+
+        // Handling errors that are returned
+        .then((response) => {
+            if (response.errors) {
+                if (response.errors[0]["title"] == "Stripe Error") {
+                    // Can do something special here for Stripe Errors
+                    // If the card is declined, display an error to the user.
+                    throw response.errors[0]["detail"];
+                } else {
+                    // These are Boost Errors
+                    throw response.errors[0]["detail"];
+                }
+            }
+            return response;
+        })
+        // Normalize the result to contain the object returned by Stripe.
+        // Add the additional details we need.
+        .then((response) => {
+            return {
+                paymentMethodId: paymentMethodId,
+                subscription: {
+                    id: response["data"]["id"],
+                    status: response["data"]["attributes"]["subscription_status"],
+                    latest_invoice: {
+                        id: response["data"]["attributes"]["latest_invoice_id"],
+                        payment_intent: {
+                            id: response["data"]["attributes"]["payment_intent_id"],
+                            status: response["data"]["attributes"]["payment_intent_status"],
+                            client_secret: response["data"]["attributes"]["payment_intent_client_secret"]
+                        }
+                    }
+                },
+            };
+        })
+        // Some payment methods require a customer to be on session
+        // to complete the payment process. Check the status of the
+        // payment intent to handle these actions.
+        .then(handlePaymentThatRequiresCustomerAction)
+
+        // If attaching this card to a Customer object succeeds,
+        // but attempts to charge the customer fail, you
+        // get a requires_payment_method error.
+        .then(handleRequiresPaymentMethod)
+
+        // No more actions required.
+        .then(onSubscriptionComplete)
+
+        .catch((error) => {
+            // An error has happened. Display the failure to the user here.
+            // We utilize the HTML element we created.
+            showCardError(error);
+        })
+    );
+}
+
+function onSubscriptionComplete({ paymentMethodId, subscription }) {
+    document.getElementById("card-element-errors").textContent = "";
+    alert("You subscribed!")
+    stopLoading();
+}
+
+function showCardError(text) {
+    let displayError = document.getElementById("card-element-errors");
+    displayError.textContent = text;
+    stopLoading();
+}
+
+// From https://stripe.com/docs/billing/subscriptions/fixed-price
+function handlePaymentThatRequiresCustomerAction({
+    subscription,
+    invoice,
+    paymentMethodId,
+}) {
+    if (subscription && subscription.status === "active") {
+        // Subscription is active, no customer actions required.
+        return { subscription, paymentMethodId };
+    }
+
+    // If it's a first payment attempt, the payment intent is on the subscription latest invoice.
+    // If it's a retry, the payment intent will be on the invoice itself.
+    let paymentIntent = invoice ? invoice.payment_intent : subscription.latest_invoice.payment_intent;
+
+    if ( paymentIntent.status === "requires_action") {
+        return stripe
+            .confirmCardPayment(paymentIntent.client_secret, {
+                payment_method: paymentMethodId,
+            })
+            .then((result) => {
+                if (result.error) {
+                    // Start code flow to handle updating the payment details.
+                    // Display error message in your UI.
+                    // The card was declined (i.e. insufficient funds, card has expired, etc).
+                    throw result;
+                } else {
+                    if (result.paymentIntent.status === "succeeded") {
+                        // Show a success message to your customer.
+                        return {
+                            subscription: subscription,
+                            invoice: invoice,
+                            paymentMethodId: paymentMethodId,
+                        };
+                    }
+                }
+            })
+            .catch((error) => {
+                displayError(error);
+            });
+    } else {
+        // No customer action needed.
+        return { subscription, paymentMethodId };
+    }
+}
+
+
+// Differs slightly from https://stripe.com/docs/billing/subscriptions/fixed-price#manage-subscription-payment-failure
+// Instead of retrying with stripe.confirmCardPayment, hit POST /policy-payments again with payment method.
+function handleRequiresPaymentMethod({
+    subscription,
+    paymentMethodId,
+}) {
+    if (subscription.status === "active") {
+        // Subscription is active, no customer actions required
+        return { subscription, paymentMethodId };
+    } else if (
+        subscription.latest_invoice.payment_intent.status === "requires_payment_method"
+    ) {
+        throw "Your card was declined. Please re-enter payment info and retry.";
+    } else {
+        return { subscription, paymentMethodId };
+    }
+}
+
+
+    </script>
+
+    <style>
+
+
+body {
+    font-family: Arial;
+}
+#card-element-errors {
+    background-color: #0097A7;
+    padding: 1.5em;
+}
+fieldset {
+    margin: 0 15px 20px;
+    padding: 0;
+    border-style: none;
+    background-color: #dedfe0;
+    box-shadow: 0 6px 9px rgba(50, 50, 93, 0.06), 0 2px 5px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 #dedfe0;
+    border-radius: 4px;
+}
+legend {
+    background-color: #E6E567;
+    padding: 2px;
+    border: 1px dotted black;
+}
+.row {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-align: center;
+    align-items: center;
+    margin-left: 15px;
+}
+.row + .row {
+    border-top: 1px solid #fff;
+}
+.StripeElement {
+    width: 100%;
+    padding: 11px 15px 11px 0;
+}
+label {
+    width: 25%;
+    min-width: 70px;
+    padding: 11px 0;
+    color: #16325F;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+input, button {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    outline: none;
+    border-style: none;
+}
+input {
+    width: 100%;
+    padding: 11px 15px 11px 0;
+    color: #000;
+    background-color: transparent;
+    -webkit-animation: 1ms void-animation-out;
+}
+input::-webkit-input-placeholder {
+    color: #0097A7;
+}
+button {
+    display: block;
+    width: calc(100% - 30px);
+    height: 40px;
+    margin: 40px 15px 0;
+    background-color: #E6E567;
+    box-shadow: 0 6px 9px rgba(50, 50, 93, 0.06), 0 2px 5px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 #cac97a;
+    border-radius: 4px;
+    color: #16325F;
+    font-weight: 600;
+    cursor: pointer;
+}
+button:disabled {
+    background-color: grey;
+}
+#spinner-background {
+    display: none;
+    height: 100%;
+    width: 100%;
+    background-color: white;
+    opacity: 0.5;
+    position: absolute;
+}
+.spinner {
+    animation: rotate 2s linear infinite;
+    z-index: 9999;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: -25px 0 0 -25px;
+    width: 50px;
+    height: 50px;
+}
+.spinner .path {
+    stroke: #E6E567;
+    stroke-linecap: round;
+    animation: dash 1.5s ease-in-out infinite;
+}
+@keyframes rotate {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+@keyframes dash {
+    0% {
+        stroke-dasharray: 1, 150;
+        stroke-dashoffset: 0;
+    }
+    50% {
+        stroke-dasharray: 90, 150;
+        stroke-dashoffset: -35;
+    }
+    100% {
+        stroke-dasharray: 90, 150;
+        stroke-dashoffset: -124;
+    }
+}
+    </style>
+</body>
