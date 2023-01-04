@@ -83,7 +83,7 @@ var card = elements.create("card", {
                 color: "#16325F",
             },
             "::placeholder": {
-                color: "#0097A7",
+                color: "#B7C6C9",
             },
         },
         invalid: {
@@ -324,24 +324,27 @@ function handleRequiresPaymentMethod({
 
 body {
     font-family: Arial;
+    background-color: #002025;
+    color: white;
 }
 #card-element-errors {
-    background-color: #0097A7;
+    background-color: #05333A;
     padding: 1.5em;
 }
 fieldset {
     margin: 0 15px 20px;
     padding: 0;
     border-style: none;
-    background-color: #dedfe0;
-    box-shadow: 0 6px 9px rgba(50, 50, 93, 0.06), 0 2px 5px rgba(0, 0, 0, 0.08),
+    background-color: #FFFFFA;
     inset 0 1px 0 #dedfe0;
     border-radius: 4px;
 }
 legend {
-    background-color: #E6E567;
-    padding: 2px;
-    border: 1px dotted black;
+    background-color: #79FA4B;
+    padding: 6px;
+    border: 1px solid #FFFFFA;
+    border-radius: 4px;
+    color: #002025;
 }
 .row {
     display: -ms-flexbox;
@@ -354,14 +357,13 @@ legend {
     border-top: 1px solid #fff;
 }
 .StripeElement {
-    width: 100%;
-    padding: 11px 15px 11px 0;
+    padding: 15px;
 }
 label {
     width: 25%;
     min-width: 70px;
     padding: 11px 0;
-    color: #16325F;
+    color: #002025;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -381,18 +383,17 @@ input {
     -webkit-animation: 1ms void-animation-out;
 }
 input::-webkit-input-placeholder {
-    color: #0097A7;
+    color: #B7C6C9;
 }
 button {
     display: block;
     width: calc(100% - 30px);
     height: 40px;
     margin: 40px 15px 0;
-    background-color: #E6E567;
-    box-shadow: 0 6px 9px rgba(50, 50, 93, 0.06), 0 2px 5px rgba(0, 0, 0, 0.08),
+    background-color: #79FA4B;
     inset 0 1px 0 #cac97a;
     border-radius: 4px;
-    color: #16325F;
+    color: #002025;
     font-weight: 600;
     cursor: pointer;
 }
