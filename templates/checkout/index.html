@@ -175,6 +175,7 @@ function createSubscription({ paymentMethodId, quoteId }) {
             method: "post",
             headers: {
                 "Content-type": "application/json",
+                'X-CSRFToken': "{{ csrf_token }}"
             },
             body: JSON.stringify({
                 paymentMethodId: paymentMethodId,
